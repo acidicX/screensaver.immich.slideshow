@@ -95,6 +95,14 @@ msgctxt "#30351"
 msgstr "Help for msgctxt #30350"
 msgid "If pictures are taken in 'burst mode' with a camera, there may be many very similar pictures occuring in the same second. This makes for a very boring slideshow if each slide is shown for a few seconds. Select this to speed up the sldeshow so that there is much less time between 'burst mode' images. If this is not enabled, only the first and last pictures in a group taken within seconds of each other will be shown."
 
+msgctxt "#30360"
+msgid "Only display favorites"
+msgstr "Only display favorites"
+
+msgctxt "#30361"
+msgstr "Help for msgctxt #30360"
+msgid "Only show favs"
+
 msgctxt "#30400"
 msgid "Connection error"
 msgstr ""

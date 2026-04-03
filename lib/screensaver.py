@@ -115,6 +115,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self.slideshow_music = ADDON.getSettingBool('music')
         self.slideshow_clock = ADDON.getSettingBool('clock')
         self.slideshow_burst = ADDON.getSettingBool('burst')
+        self.slideshow_favsOnly = ADDON.getSettingBool('favsOnly')
         # convert float to hex value usable by the skin
         self.slideshow_dim = hex(int('%.0f' % (float(ADDON.getSettingInt('level')) * 2.55)))[2:] + 'ffffff'
 
@@ -237,7 +238,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         # Get all of the pictures taken on the chosen date.
         takenAfter = chosen_date+'T00:00:00.000Z'
         takenBefore = chosen_date+'T23:59:59.999Z'
-        payload = json.dumps({"takenAfter": takenAfter, "takenBefore": takenBefore, "size": 1000})
+        payload = json.dumps({"takenAfter": takenAfter, "takenBefore": takenBefore, "size": 1000, "isFavorite": self.slideshow_favsOnly})
         all_images_for_date=[]
         more = True
         while more:
