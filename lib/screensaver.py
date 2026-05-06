@@ -85,9 +85,10 @@ IMMICH_TEMP_FILE_EXTENSION = '.immich-tmp'
 
 class Screensaver(xbmcgui.WindowXMLDialog):
     def __init__(self, *args, **kwargs):
-        pass
+        super().__init__(*args, **kwargs)
 
     def onInit(self):
+        log('onInit called', xbmc.LOGDEBUG)
         try:
             # Init the monitor class to catch onscreensaverdeactivated calls
             self.Monitor = MyMonitor(action = self._exit)
@@ -132,6 +133,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         return distinct_dates
 
     def _get_settings(self):
+        log('_get_settings called', xbmc.LOGDEBUG)
         # Read addon settings
         self.slideshow_URL = ADDON.getSetting('URL')
         self.slideshow_APIKey = ADDON.getSetting('APIKey')
@@ -154,8 +156,10 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self.slideshow_dbuser = ADDON.getSetting('dbuser')
         self.slideshow_dbpassword = ADDON.getSetting('dbpassword')
         self.slideshow_offset_adjustment = 0
+        log(f'Settings loaded: URL={self.slideshow_URL}, time={self.slideshow_time}, limit={self.slideshow_limit}, dbdates={self.slideshow_dbdates}', xbmc.LOGDEBUG)
 
     def _set_ui_controls(self):
+        log('_set_ui_controls called', xbmc.LOGDEBUG)
         # Get the screensaver window id
         self.winid = xbmcgui.Window(xbmcgui.getCurrentWindowDialogId())
         # Get image controls from the xml
@@ -175,6 +179,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self._set_prop('SkinName',xbmc.getSkinDir())
 
     def _start_show(self):
+        log('_start_show called', xbmc.LOGDEBUG)
         # start with image 1
         current_image_control = self.image_control1
         order = [1,2]
@@ -182,17 +187,21 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         while (not self.Monitor.abortRequested()) and (not self.stop):
             # Get the next grouping of pictures
             image_groupings = self._get_image_groupings()
+            log(f'Got {len(image_groupings)} image group(s)', xbmc.LOGDEBUG)
             for image_group in image_groupings:
                 # Delete any temporary image files that have been retrieved
                 self._delete_temporary_files()
                 # fastmode is true when we find pictures taken in burst mode
                 fastmode = True if (len(image_group) > 2 and self.slideshow_burst) else False
+                log(f'Showing image group with {len(image_group)} image(s), fastmode={fastmode}', xbmc.LOGDEBUG)
                 # iterate through all the images in the group
                 for image in image_group:
                     image_uuid = image[1]
                     local_img_name = ADDON_USERDATA_FOLDER+image_uuid+IMMICH_TEMP_FILE_EXTENSION
+                    log(f'Downloading image {image_uuid}', xbmc.LOGDEBUG)
                     if not self._download_file(f'{self.slideshow_URL}/api/assets/{image_uuid}/original', local_img_name):
                         # Download failed, go to next image
+                        log(f'Download failed for image {image_uuid}', xbmc.LOGWARNING)
                         continue
 
                     first_in_group = image == image_group[0]
@@ -246,9 +255,10 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                     break
 
     def _get_image_groupings(self, update=False):
+        log('_get_image_groupings called', xbmc.LOGDEBUG)
         # Ask for a random date
         chosen_date = self._get_random_date()
-
+        log(f'Chosen date: {chosen_date}', xbmc.LOGDEBUG)
         # Get all of the pictures taken on the chosen date.
         takenAfter = chosen_date+'T00:00:00.000Z'
         takenBefore = chosen_date+'T23:59:59.999Z'
@@ -269,7 +279,10 @@ class Screensaver(xbmcgui.WindowXMLDialog):
 
         if len(all_images_for_date) == 0:
             # No displayable pictures found for this date
+            log(f'No displayable pictures found for date {chosen_date}', xbmc.LOGDEBUG)
             return []
+
+        log(f'Found {len(all_images_for_date)} displayable picture(s) for date {chosen_date}', xbmc.LOGDEBUG)
 
         #Sort by time, break ties with filename - pictures taken same second are ordered correctly
         all_images_for_date.sort(key=lambda x: (x[0],x[2]))
@@ -315,6 +328,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             return image_groupings[offset:offset+self.slideshow_limit]
 
     def _get_random_date(self):
+        log('_get_random_date called', xbmc.LOGDEBUG)
         if (self.slideshow_dbdates):
             # Use the next date in the list of distinct dates, then get all of the pictures taken on the same date.
             # Set a random offset into the list of pictures so we don't always start wtih the earliest picture on the date.
@@ -343,6 +357,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         # chosen_date = "2010-10-03" # landscape and portrait mixed
         # chosen_date = "2025-12-17"; self.slideshow_offset_adjustment = 43 # horizontal panorama
         # chosen_date = "2025-12-16"; self.slideshow_offset_adjustment = 113 # vertical panorama
+        log(f'_get_random_date returning: {chosen_date}', xbmc.LOGDEBUG)
         return chosen_date
 
     def _get_local_filename_for_image(self, image):
@@ -398,6 +413,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self._set_prop('FadeoutLabels', '0')
 
     def _get_image_info(self, image):
+        log(f'_get_image_info called for image {image[1]}', xbmc.LOGDEBUG)
         immich_info = {}
         iptc_info = {}
         # Get info about image from the immich API
@@ -422,6 +438,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         return image_info
 
     def _get_iptcinfo(self, filename):
+        log(f'_get_iptcinfo called for file {filename}', xbmc.LOGDEBUG)
         # Retrieve info directly from the file
         iptc_info = {}
         try:
@@ -538,6 +555,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         return records
 
     def _download_file(self, url, local_filename):
+        log(f'_download_file called: url={url}, local_filename={local_filename}', xbmc.LOGDEBUG)
         try:
             with requests.get(url, stream=True, headers={'x-api-key': self.slideshow_APIKey}) as r:
                 r.raise_for_status()
@@ -549,9 +567,12 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 xbmc.sleep(100)
                 attempts += 1
                 if attempts > 100:
+                    log(f'_download_file timed out waiting for file: {local_filename}', xbmc.LOGWARNING)
                     return False
+            log(f'_download_file succeeded: {local_filename}', xbmc.LOGDEBUG)
             return True
-        except:
+        except Exception as e:
+            log(f'_download_file exception for url={url}: {e}', xbmc.LOGWARNING)
             return False
 
     def _delete_temporary_files(self, exiting=False):
@@ -563,6 +584,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             pass
 
     def _api_call(self, action, api, payload):
+        log(f'_api_call called: action={action}, api={api}', xbmc.LOGDEBUG)
         response = {}
         try:
             headers = {
@@ -571,6 +593,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             'x-api-key': self.slideshow_APIKey
             }
             resp = requests.request(action, self.slideshow_URL+api, headers=headers, data=payload)
+            log(f'_api_call response status: {resp.status_code}', xbmc.LOGDEBUG)
             response = json.loads(resp.text)
             if resp.status_code == 401:
                 self.stop = True;
@@ -581,6 +604,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         except SlideshowException:
             raise
         except requests.exceptions.ConnectionError as ce:
+            log(f'_api_call connection error: {ce}', xbmc.LOGWARNING)
             raise SlideshowException(ADDON.getLocalizedString(30400), str(ce))
         return response
 
@@ -591,6 +615,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self.winid.clearProperty('Screensaver.%s' % name)
 
     def _exit(self):
+        log('_exit called', xbmc.LOGDEBUG)
         # exit when onScreensaverDeactivated gets called
         self.stop = True
         # clear our properties on exit
