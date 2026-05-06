@@ -206,22 +206,29 @@ class Screensaver(xbmcgui.WindowXMLDialog):
 
                     first_in_group = image == image_group[0]
                     last_in_group = image == image_group[-1]
+                    log(f'Processing image {image_uuid}: first_in_group={first_in_group}, last_in_group={last_in_group}', xbmc.LOGDEBUG)
                     if not fastmode or (fastmode and (first_in_group or last_in_group)):
                         # Add background image to gui
                         if order[0] == 1:
+                            log(f'Setting background_image1 to {local_img_name}', xbmc.LOGDEBUG)
                             self.background_image1.setImage(local_img_name, False)
                         else:
+                            log(f'Setting background_image2 to {local_img_name}', xbmc.LOGDEBUG)
                             self.background_image2.setImage(local_img_name, False)
                         # add fade anim to background images
                         self._set_prop('Fade%d' % order[0], '0')
                         self._set_prop('Fade%d' % order[1], '1')
+                        log(f'Set fade properties: Fade{order[0]}=0, Fade{order[1]}=1', xbmc.LOGDEBUG)
                         # Add picture information to slide
                         # Only show label transition animation when changing to a new date
                         self._set_info_fields(image,transition=(image_group == image_groupings[0])) 
 
                     # Show the slide
+                    control_name = 'image_control1' if current_image_control == self.image_control1 else 'image_control2'
+                    log(f'Showing slide: image_control={control_name}, image={image_uuid}', xbmc.LOGDEBUG)
                     current_image_control.setImage(local_img_name, False)
                     animation,timetowait = self.get_animimation(local_img_name, fastmode, first_in_group, last_in_group)
+                    log(f'Animation set, timetowait={timetowait}ms', xbmc.LOGDEBUG)
                     current_image_control.setAnimations(animation)
 
                     if fastmode:
@@ -231,6 +238,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                     self._set_prop('Splash', 'hide')
 
                     # display the image for the specified amount of time
+                    log(f'Displaying image {image_uuid} for {timetowait}ms', xbmc.LOGDEBUG)
                     count = timetowait
                     while (not self.Monitor.abortRequested()) and (not self.stop) and count > 0:
                         count -= 1000
@@ -243,14 +251,18 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                     else:
                         current_image_control = self.image_control1
                         order = [1,2]
+                    next_control_name = 'image_control2' if current_image_control == self.image_control2 else 'image_control1'
+                    log(f'Switched to {next_control_name} for next slide', xbmc.LOGDEBUG)
 
                     # break out of the 'images in image_group loop' if onScreensaverDeactivated is called
                     if  self.stop or self.Monitor.abortRequested():
+                        log('Stop requested, breaking out of image loop', xbmc.LOGDEBUG)
                         self.stop = True
                         break
 
                 # break out of the 'image_group in image_groupings' loop if onScreensaverDeactivated is called
                 if  self.stop or self.Monitor.abortRequested():
+                    log('Stop requested, breaking out of image_group loop', xbmc.LOGDEBUG)
                     self.stop = True
                     break
 
