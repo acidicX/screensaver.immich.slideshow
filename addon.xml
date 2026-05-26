@@ -13,12 +13,13 @@
 		</description>
 		<platform>all</platform>
 		<license>GPL-2.0-only</license>
-		<forum></forum>
-		<source></source>
+		<forum>https://forum.kodi.tv/showthread.php?tid=380031</forum>
+		<source>https://github.com/smfontes/screensaver.immich.slideshow</source>
 		<assets>
 			<icon>resources/icon.png</icon>
-			<fanart>resources/fanart.jpg</fanart>
+			<fanart>resources/fanart.gif</fanart>
 		</assets>
 		<news></news>
 	</extension>
+	<extension point="xbmc.python.library" library="lib/getalbumnames.py"/>
 </addon>
