@@ -141,6 +141,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             xbmc.executebuiltin("Dialog.Close(all)")
 
     def _get_addon_settings(self):
+        log('_get_addon_settings called', xbmc.LOGDEBUG)
         # Read addon settings
         self.setting_URL = ADDON.getSetting('URL')
         self.setting_APIKey = ADDON.getSetting('APIKey')
@@ -167,6 +168,12 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self.setting_usePreview = ADDON.getSettingBool('usePreview')
         self.empty_date_count = 0
         self.offset_adjustment = 0
+        log(f'_get_addon_settings: URL={self.setting_URL} time={self.setting_time}s limit={self.setting_limit} '
+            f'date={self.setting_date} tags={self.setting_tags} music={self.setting_music} '
+            f'clock={self.setting_clock} burst={self.setting_burst} panorama={self.setting_panorama} '
+            f'kenburns={self.setting_kenburns} dim={self.setting_dim} favsOnly={self.setting_favsOnly} '
+            f'albums={self.setting_albums} albumname={self.setting_albumname} '
+            f'usePreview={self.setting_usePreview} dbdates={self.setting_dbdates}', xbmc.LOGDEBUG)
         
     def _set_ui_controls(self):
         log('_set_ui_controls called', xbmc.LOGDEBUG)
@@ -185,6 +192,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         self._set_prop('SkinName',xbmc.getSkinDir())
 
     def _initialize_immich(self):
+        log('_initialize_immich called', xbmc.LOGDEBUG)
         self.immichapi = ImmichAPI(
             self.setting_APIKey,
             self.setting_URL,
@@ -193,6 +201,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         )
 
     def _validate_settings(self):
+        log('_validate_settings called', xbmc.LOGDEBUG)
         # If use albums is specified, make sure some albums were selected
         if (self.setting_albums):
             self.albumlist = self.load_selected_albums()
@@ -200,6 +209,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 self.albumindices = list(range(len(self.albumlist)))
                 random.shuffle(self.albumindices)
                 self.albumindex = 0
+                log(f'_validate_settings: albums enabled, {len(self.albumlist)} album(s) loaded', xbmc.LOGDEBUG)
             else:
                 # No albums were found
                 log("'Use Albums' is set but there are no albums selected. Setting value to False")
@@ -212,6 +222,8 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 # No favorites were found
                 log("'Only Display Favorites' is set but there are no favorite images. Setting value to False")
                 self.setting_favsOnly = False
+            else:
+                log('_validate_settings: favsOnly enabled and favorites found', xbmc.LOGDEBUG)
     
     def load_selected_albums(self):
         if not ALBUMS_FILE.exists():
@@ -267,32 +279,43 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         return distinct_dates
 
     def _start_show(self):
+        log('_start_show called', xbmc.LOGDEBUG)
         # start with first image control
         control_index = 0
         # loop until onScreensaverDeactivated is called
         while (not self.Monitor.abortRequested()):
             # Get a bunch of images from the same date
             image_groupings = self._get_image_groupings()
-            log(f'Got {len(image_groupings)} image group(s)', xbmc.LOGDEBUG)
-            for image_group in image_groupings:
+            log(f'_start_show: got {len(image_groupings)} image group(s)', xbmc.LOGDEBUG)
+            for group_idx, image_group in enumerate(image_groupings):
                 # an image_group is all pictures taken within 2 seconds of each other
                 fastmode = True if (len(image_group) > 2 and self.setting_burst) else False
-                for image in image_group:
+                log(f'_start_show: group {group_idx + 1}/{len(image_groupings)}: '
+                    f'{len(image_group)} image(s), fastmode={fastmode}', xbmc.LOGDEBUG)
+                for img_idx, image in enumerate(image_group):
                     # break if onScreensaverDeactivated is called
                     if self.Monitor.abortRequested():
+                        log('_start_show: abort requested, raising ScreensaverAbortException', xbmc.LOGDEBUG)
                         raise ScreensaverAbortException
 
                     # download the image
                     image['local_path'] = self._get_local_filename_for_image(image)
+                    log(f'_start_show: downloading image {img_idx + 1}/{len(image_group)}: '
+                        f'id={image["id"]} filename={image["originalFileName"]} '
+                        f'mimeType={image["originalMimeType"]} -> {image["local_path"]}', xbmc.LOGDEBUG)
                     if not self.immichapi.download_file(image['id'], image['local_path'], image['originalMimeType'], self.setting_usePreview):
                         #download failed, go to next image
+                        log(f'_start_show: download failed for image id={image["id"]}, skipping', xbmc.LOGWARNING)
                         continue
 
                     # logic to skip transitions when in fastmode
                     first_in_group = image is image_group[0]
                     last_in_group  = image is image_group[-1]
+                    log(f'_start_show: image {img_idx + 1}/{len(image_group)}: '
+                        f'first_in_group={first_in_group} last_in_group={last_in_group}', xbmc.LOGDEBUG)
                     if not fastmode or (fastmode and (first_in_group or last_in_group)):
                         # Add background image to gui
+                        log(f'_start_show: setting background_controls[{control_index}] to {image["local_path"]}', xbmc.LOGDEBUG)
                         self.background_controls[control_index].setImage(image['local_path'], False)
                         self._set_prop('Background', str(control_index))
                         # assign all of the requested and available info to the image
@@ -301,35 +324,47 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                         # Add image info to slide
                         self._set_info_fields(image, control_index)
                         self._set_prop('Info', str(control_index))
+                    else:
+                        log(f'_start_show: fastmode mid-burst, skipping background/info update for image {img_idx + 1}', xbmc.LOGDEBUG)
 
                     # Show the slide with animations
+                    log(f'_start_show: setting image_controls[{control_index}] to {image["local_path"]}', xbmc.LOGDEBUG)
                     self.image_controls[control_index].setImage(image['local_path'], False)
                     timetowait, animation = self.get_animimation(image, fastmode, first_in_group, last_in_group)
+                    log(f'_start_show: timetowait={timetowait}ms, animation has {len(animation)} effect(s)', xbmc.LOGDEBUG)
                     self.image_controls[control_index].setAnimations(animation)
                     # About to show images, so turn off splash screen
                     self._set_prop('Splash', 'hide')
 
                     # display the image for the specified amount of time
+                    log(f'_start_show: displaying image for {timetowait}ms on control_index={control_index}', xbmc.LOGDEBUG)
                     if self.Monitor.waitForAbort(timetowait / 1000):
+                        log('_start_show: abort during waitForAbort, raising ScreensaverAbortException', xbmc.LOGDEBUG)
                         raise ScreensaverAbortException
 
                     # swap to next image control
                     control_index = 0 if control_index == 1 else 1
+                    log(f'_start_show: swapped to control_index={control_index}', xbmc.LOGDEBUG)
+                log(f'_start_show: finished group {group_idx + 1}/{len(image_groupings)}', xbmc.LOGDEBUG)
 
     def _get_image_groupings(self, update=False):    
+        log('_get_image_groupings called', xbmc.LOGDEBUG)
         all_images_for_date = self._fetch_images_for_date()
         if len(all_images_for_date) == 0:
             # No displayable pictures found for this date
             self.empty_date_count +=1
+            log(f'_get_image_groupings: no images found (empty_date_count={self.empty_date_count})', xbmc.LOGDEBUG)
             if self.empty_date_count > MAX_CONSECUTIVE_EMPTY_DATES:
                 log(f"Made {MAX_CONSECUTIVE_EMPTY_DATES} date attempts with no images. Aborting")
                 raise ScreensaverAbortException
             return []
         self.empty_date_count = 0
         image_groupings = self._group_images(all_images_for_date)
+        log(f'_get_image_groupings: {len(all_images_for_date)} image(s) grouped into {len(image_groupings)} group(s)', xbmc.LOGDEBUG)
         # Return the requested number of pictures
         if self.setting_limit == 0 or (len(image_groupings) <= self.setting_limit):
             # Fewer picture for this date than max allowed, so display them all
+            log(f'_get_image_groupings: returning all {len(image_groupings)} group(s) (limit={self.setting_limit})', xbmc.LOGDEBUG)
             return image_groupings
         else:
             # More pictures on this date than the max allowed
@@ -337,9 +372,12 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             offset = random.randrange(len(image_groupings) - self.setting_limit)
             if self.offset_adjustment != 0:
                 offset = self.offset_adjustment
+            log(f'_get_image_groupings: returning {self.setting_limit} group(s) starting at offset={offset} '
+                f'(total groups={len(image_groupings)}, limit={self.setting_limit})', xbmc.LOGDEBUG)
             return image_groupings[offset:offset+self.setting_limit]
 
     def _fetch_images_for_date(self):
+        log('_fetch_images_for_date called', xbmc.LOGDEBUG)
         args = {}
         if self.setting_favsOnly:
             args["isFavorite"] = True
@@ -350,10 +388,12 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 random.shuffle(self.albumindices)
                 self.albumindex = 0
             args["albumIds"] = [self.current_album["id"]]
+            log(f'_fetch_images_for_date: fetching from album={self.current_album.get("albumName", self.current_album["id"])}', xbmc.LOGDEBUG)
         date = self._get_random_date()
         args["takenAfter"] = f"{date}T00:00:00.000Z"
         args["takenBefore"] = f"{date}T23:59:59.999Z"
         args["withExif"] = "true"
+        log(f'_fetch_images_for_date: querying date={date} favsOnly={self.setting_favsOnly}', xbmc.LOGDEBUG)
         all_images_for_date = []
         for page in self.immichapi.search_metadata(args):
             for item in page:
@@ -372,9 +412,11 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                         image['City'] = exifinfo['city']
                         image['Headline'] = exifinfo['description']
                     all_images_for_date.append(image)
+        log(f'_fetch_images_for_date: found {len(all_images_for_date)} displayable image(s) for date={date}', xbmc.LOGDEBUG)
         return all_images_for_date
 
     def _get_random_date(self):
+        log('_get_random_date called', xbmc.LOGDEBUG)
         if (self.setting_dbdates):
             # Get some random date that at least one of the pictures was taken (each date is the single element of a list)
             if (self.setting_albums):
@@ -419,10 +461,11 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         # chosen_date = "2026-04-08"; self.offset_adjustment = 3 # cascais lighthouse
         # chosen_date = "2023-12-13" # heic
         # chosen_date = "2026-05-15" # heif
-        # log(f"chosen date: {chosen_date}")
+        log(f'_get_random_date: chosen_date={chosen_date}', xbmc.LOGDEBUG)
         return chosen_date
 
     def _group_images(self, all_images_for_date):
+        log(f'_group_images called with {len(all_images_for_date)} image(s)', xbmc.LOGDEBUG)
         # Sort by time, break ties with filename - pictures taken same second are ordered correctly
         all_images_for_date.sort(key=lambda x: (x["localDateTime"], x["originalFileName"]))
         group_index = 0
@@ -449,6 +492,8 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 image_groupings.append([all_images_for_date[image_index]])
             prev_image_date_object = this_image_date_object
             image_index+=1
+        log(f'_group_images: created {len(image_groupings)} group(s); '
+            f'sizes={[len(g) for g in image_groupings]}', xbmc.LOGDEBUG)
         return image_groupings
     
     def _get_local_filename_for_image(self, image):
@@ -456,6 +501,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         return str(ADDON_USERDATA_FOLDER / (image['id'] + IMMICH_TEMP_FILE_EXTENSION))
 
     def _get_image_info(self, image):
+        log(f'_get_image_info called: id={image["id"]} filename={image["originalFileName"]}', xbmc.LOGDEBUG)
         info = {}
         iptc_info = {}
         # Get extra info for this image
@@ -469,9 +515,11 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             # Get more info from the actual file.
             iptc_info = self._get_iptcinfo(self._get_local_filename_for_image(image))
         image_info = {**info, **iptc_info}
+        log(f'_get_image_info: returning fields={list(image_info.keys())}', xbmc.LOGDEBUG)
         return image_info
 
     def _get_iptcinfo(self, filename):
+        log(f'_get_iptcinfo called: filename={filename}', xbmc.LOGDEBUG)
         fields = {
             "Headline": "headline",
             "Caption": "caption/abstract",
@@ -491,8 +539,10 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                     iptcinfo[key] = raw.decode("utf-8")
                 except UnicodeDecodeError:
                     iptcinfo[key] = raw.decode("latin-1", errors="replace")
+            log(f'_get_iptcinfo: found fields={list(iptcinfo.keys())} in {filename}', xbmc.LOGDEBUG)
             return iptcinfo
-        except Exception:
+        except Exception as e:
+            log(f'_get_iptcinfo: failed to read IPTC from {filename}: {e}', xbmc.LOGDEBUG)
             return iptcinfo
 
     def _set_info_fields(self, image, order):
@@ -504,7 +554,10 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 self._clear_prop(prop+str(order))
 
     def get_animimation(self, image, fastmode, first_in_group, last_in_group):
+        log(f'get_animimation called: filename={image.get("originalFileName")} fastmode={fastmode} '
+            f'first_in_group={first_in_group} last_in_group={last_in_group}', xbmc.LOGDEBUG)
         if fastmode and not (first_in_group or last_in_group):
+            log('get_animimation: fastmode mid-burst, returning timetowait=30ms no animation', xbmc.LOGDEBUG)
             return 30, []
         FADE_FRACTION = 0.2
         EXTRA_TIME_FRACTION = 0.25
@@ -514,14 +567,18 @@ class Screensaver(xbmcgui.WindowXMLDialog):
             FADEIN_EFFECT =  ['conditional', f'effect=fade start=0 end=100 time={fade_ms} reversible=false condition=true']
             FADEOUT_EFFECT = ['conditional', f'effect=fade start=100 end=0 time={fade_ms*2} delay={slideshow_ms+(2*fade_ms)} reversible=false condition=true']
             if first_in_group:
+                log(f'get_animimation: fastmode first_in_group, timetowait={slideshow_ms / 2}ms fade-in', xbmc.LOGDEBUG)
                 return slideshow_ms / 2,[FADEIN_EFFECT]
             else:
+                log(f'get_animimation: fastmode last_in_group, timetowait={slideshow_ms}ms fade-out', xbmc.LOGDEBUG)
                 return slideshow_ms,[FADEOUT_EFFECT]
 
         screen_w = self.winid.getWidth()
         screen_h = self.winid.getHeight()
         img_w, img_h = imagesize.get(image['local_path'])
         aspect_ratio = max(img_w, img_h) / min(img_w, img_h)
+        log(f'get_animimation: screen={screen_w}x{screen_h} img={img_w}x{img_h} '
+            f'aspect_ratio={aspect_ratio:.3f} orientation={image.get("Orientation")}', xbmc.LOGDEBUG)
         PANORAMA_RATIO = 1.85
         if (self.setting_panorama and aspect_ratio >= PANORAMA_RATIO):
             orientation = image['Orientation']
@@ -533,6 +590,8 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 slide_y = 0                                                #   don't shift in y direction
                 total_ms = int(slideshow_ms * (scaled_w / screen_w))       #   increase the time so rate is the same
                 duration_ms = total_ms - ((slideshow_ms * EXTRA_TIME_FRACTION) * (scaled_w / screen_w))      #   fudge factor to make fading work
+                log(f'get_animimation: horizontal panorama scale={scale_start:.1f}% '
+                    f'slide_x={slide_x:.1f} total_ms={total_ms} duration_ms={duration_ms:.0f}ms', xbmc.LOGDEBUG)
             else:                                                          # verticalal panorama
                 baseline_w = screen_h * (img_h / img_w)                    #   scale factor to make image width fit the screen
                 scale_start = scale_end = (screen_w / baseline_w) * 100.0
@@ -541,6 +600,8 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 slide_x = 0                                                #   dont shift in the x direction
                 total_ms = int(slideshow_ms * (scaled_h / screen_h))       #   increase the time so rate is the same
                 duration_ms = total_ms - ((slideshow_ms * EXTRA_TIME_FRACTION) * (scaled_h / screen_h))      #   fudge factor to make fading work
+                log(f'get_animimation: vertical panorama scale={scale_start:.1f}% '
+                    f'slide_y={slide_y:.1f} total_ms={total_ms} duration_ms={duration_ms:.0f}ms', xbmc.LOGDEBUG)
         else: # Not a panorama slide
             if self.setting_kenburns:
                 base_scale = 115 + self.setting_time
@@ -550,13 +611,18 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                 slide_y = random.randint(-1,1) * ((scale_h - screen_h) / 2.0)
                 scale_start = base_scale if (slide_x,slide_y) != (0,0) else 100 
                 scale_end = base_scale * 1.2 if (slide_x,slide_y) != (0,0) else base_scale * 1.3
+                log(f'get_animimation: ken burns scale={scale_start:.1f}%->{scale_end:.1f}% '
+                    f'slide=({slide_x:.1f},{slide_y:.1f})', xbmc.LOGDEBUG)
             else: # Just crossfade
                 slide_x = slide_y = 0
                 scale_start = scale_end = 100
+                log('get_animimation: crossfade only', xbmc.LOGDEBUG)
             duration_ms = slideshow_ms
             total_ms = slideshow_ms + (slideshow_ms * EXTRA_TIME_FRACTION)
 
         zoom_ms = slide_ms = fadeout_start = total_ms + (slideshow_ms * FADE_FRACTION)
+        log(f'get_animimation: duration_ms={duration_ms:.0f}ms total_ms={total_ms:.0f}ms '
+            f'fade_ms={fade_ms:.0f}ms fadeout_start={fadeout_start:.0f}ms', xbmc.LOGDEBUG)
         animation = [
                         ["conditional", f"effect=fade  time={fade_ms}  start=0 end=100                                     condition=true"],
                         ["conditional", f"effect=slide time={slide_ms} start={slide_x},{slide_y} end={-slide_x},{-slide_y} condition=true"],
