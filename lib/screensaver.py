@@ -88,6 +88,9 @@ ALBUMS_FILE = ADDON_USERDATA_FOLDER / "selected_albums.json"
 PICTURE_FORMATS = ('bmp', 'jpeg', 'jpg', 'gif', 'png', 'tiff', 'mng', 'ico', 'pcx', 'tga', 'heic', 'heif')
 MAX_CONSECUTIVE_EMPTY_DATES = 25
 EXCEPTION_TYPE_NOT_HANDLED = 30940
+# Crossfade timing: fade occupies this fraction of the per-image display time, capped at MAX_FADE_MS
+FADE_FRACTION = 0.2
+MAX_FADE_MS = 2000
 
 class Screensaver(xbmcgui.WindowXMLDialog):
     def __init__(self, *args, **kwargs):
@@ -282,6 +285,8 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         log('_start_show called', xbmc.LOGDEBUG)
         # start with first image control
         control_index = 0
+        # tracks whether the first image has been shown yet (no previous control to fade out)
+        first_slide = True
         # loop until onScreensaverDeactivated is called
         while (not self.Monitor.abortRequested()):
             # Get a bunch of images from the same date
@@ -327,12 +332,26 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                     else:
                         log(f'_start_show: fastmode mid-burst, skipping background/info update for image {img_idx + 1}', xbmc.LOGDEBUG)
 
+                    # Crossfade: now that the new image is downloaded and ready, explicitly fade
+                    # out the previously visible control.  This keeps the transition in sync with
+                    # image availability and prevents the current image from vanishing into black
+                    # when the next image download takes longer than the old fixed-delay timer allowed.
+                    is_mid_burst = fastmode and not first_in_group and not last_in_group
+                    if not first_slide and not is_mid_burst:
+                        old_control = 1 - control_index
+                        xfade_ms = int(min(self.setting_time * 1000 * FADE_FRACTION, MAX_FADE_MS))
+                        self.image_controls[old_control].setAnimations(
+                            [["conditional", f"effect=fade start=100 end=0 time={xfade_ms} reversible=false condition=true"]]
+                        )
+                        log(f'_start_show: crossfade fade-out triggered on image_controls[{old_control}]', xbmc.LOGDEBUG)
+
                     # Show the slide with animations
                     log(f'_start_show: setting image_controls[{control_index}] to {image["local_path"]}', xbmc.LOGDEBUG)
                     self.image_controls[control_index].setImage(image['local_path'], False)
                     timetowait, animation = self.get_animimation(image, fastmode, first_in_group, last_in_group)
                     log(f'_start_show: timetowait={timetowait}ms, animation has {len(animation)} effect(s)', xbmc.LOGDEBUG)
                     self.image_controls[control_index].setAnimations(animation)
+                    first_slide = False
                     # About to show images, so turn off splash screen
                     self._set_prop('Splash', 'hide')
 
@@ -559,10 +578,9 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         if fastmode and not (first_in_group or last_in_group):
             log('get_animimation: fastmode mid-burst, returning timetowait=30ms no animation', xbmc.LOGDEBUG)
             return 30, []
-        FADE_FRACTION = 0.2
         EXTRA_TIME_FRACTION = 0.25
         slideshow_ms = self.setting_time * 1000
-        fade_ms = min(slideshow_ms * FADE_FRACTION,2000)
+        fade_ms = min(slideshow_ms * FADE_FRACTION, MAX_FADE_MS)
         if fastmode:
             FADEIN_EFFECT =  ['conditional', f'effect=fade start=0 end=100 time={fade_ms} reversible=false condition=true']
             FADEOUT_EFFECT = ['conditional', f'effect=fade start=100 end=0 time={fade_ms*2} delay={slideshow_ms+(2*fade_ms)} reversible=false condition=true']
@@ -627,7 +645,6 @@ class Screensaver(xbmcgui.WindowXMLDialog):
                         ["conditional", f"effect=fade  time={fade_ms}  start=0 end=100                                     condition=true"],
                         ["conditional", f"effect=slide time={slide_ms} start={slide_x},{slide_y} end={-slide_x},{-slide_y} condition=true"],
                         ["conditional", f"effect=zoom  time={zoom_ms}  start={scale_start} end={scale_end} center=auto     condition=true"],
-                        ["conditional", f"effect=fade  time={fade_ms}  start=100 end=0 delay={fadeout_start}               condition=true"],
                     ]
         return duration_ms, animation
 
