@@ -39,16 +39,16 @@ class ImmichAPI:
         requests.packages.urllib3.disable_warnings()
 
     def search_random(self,args):
-        resp = self._api_call("POST", "/search/random", payload=args)
+        resp = self._api_call("POST", "/api/search/random", payload=args)
         return json.loads(resp.text)
 
     def get_asset(self, assetUUID):
-        resp =self._api_call("GET", "/assets/"+assetUUID)
+        resp =self._api_call("GET", "/api/assets/"+assetUUID)
         return json.loads(resp.text)
 
     def get_albums(self):
         try: 
-            resp = self._api_call("GET", "/albums")
+            resp = self._api_call("GET", "/api/albums")
             return json.loads(resp.text)
         except:
             return None
@@ -57,7 +57,7 @@ class ImmichAPI:
         payload = dict(args)
         payload["size"] = 1000
         while True:
-            resp = self._api_call("POST", "/search/metadata", payload=payload)
+            resp = self._api_call("POST", "/api/search/metadata", payload=payload)
             data = resp.json()
             yield data["assets"]["items"]
             next_page = data["assets"]["nextPage"]
@@ -124,10 +124,10 @@ class ImmichAPI:
     def download_file(self, fileUUID, local_filename, mime_type=None, use_preview=False):
         if use_preview or mime_type.lower().endswith(("heic", "heif")):
             # If HEIC/HEIF, get thumbnail - kodi doesn't support these
-            url = f"{self.url}/assets/{fileUUID}/thumbnail?size=preview"
+            url = f"{self.url}/api/assets/{fileUUID}/thumbnail?size=preview"
         else:
             # All other formats: request true original, full resolution
-            url = f"{self.url}/assets/{fileUUID}/original"
+            url = f"{self.url}/api/assets/{fileUUID}/original"
         try:
             resp = self.download_file_session.get(url, stream=True, timeout=(1.0, 10.0))
             if resp.status_code != 200:
