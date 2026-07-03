@@ -411,7 +411,7 @@ class Screensaver(xbmcgui.WindowXMLDialog):
         date = self._get_random_date()
         args["takenAfter"] = f"{date}T00:00:00.000Z"
         args["takenBefore"] = f"{date}T23:59:59.999Z"
-        args["withExif"] = "true"
+        args["withExif"] = True
         log(f'_fetch_images_for_date: querying date={date} favsOnly={self.setting_favsOnly}', xbmc.LOGDEBUG)
         all_images_for_date = []
         for page in self.immichapi.search_metadata(args):
